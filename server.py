@@ -6,6 +6,7 @@ import tornado.websocket
 
 import chevron # tornado.render() doesn't support all the moustache we require to render index.mst
 import os
+import sys
 import random
 # from typing import Optional  # noqa
 import logging
@@ -19,6 +20,7 @@ _LOGGER = logging.getLogger(__name__)
 editor_client_dir = os.path.join("node_modules","@node-red","editor-client")
 
 # TODO this is just to store some user settings to return, very simple and has no persistence
+configs_dir = ""
 websockets = []
 user = {}
 flows = []
@@ -86,16 +88,19 @@ def doesNodeObjectExistInFlows(local_flows, key, value):
 def get_or_build_flows_file(flows_dir):
     # TODO can I use these within esphome lol?
     global flows
-    files_in_dir = os.listdir(os.path.join(os.path.dirname(__file__), flows_dir))
+    # files_in_dir = os.listdir(os.path.join(os.path.dirname(__file__), flows_dir))
+    files_in_dir = os.listdir(flows_dir)
     potential_flows = []
     for filename in files_in_dir:
         if filename.endswith('.flows'):
-            with open(os.path.join(os.path.dirname(__file__), flows_dir, filename)) as f:
+            # with open(os.path.join(os.path.dirname(__file__), flows_dir, filename)) as f:
+            with open(os.path.join(flows_dir, filename)) as f:
                 potential_flows.append(json.loads(f.read()))
     if len(potential_flows) == 0:
         potential_flows.append(build_flows_object(flows_dir))
         # TODO variable filename for flows just like esphome?
-        with open(os.path.join(os.path.dirname(__file__), flows_dir, f"esphome_node_flows.flows"), 'w') as f:
+        # with open(os.path.join(os.path.dirname(__file__), flows_dir, f"esphome_node_flows.flows"), 'w') as f:
+        with open(os.path.join(flows_dir, f"esphome_node_flows.flows"), 'w') as f:
             f.write(json.dumps(potential_flows[0], indent=2))
         flows = potential_flows[0]
     elif len(potential_flows) == 1:
@@ -126,14 +131,16 @@ def loadESPHomeConfigs(configs_dir):
     configs = []
     for filename in files_in_dir:
         if (filename.endswith('.yaml') or filename.endswith('.yml')) and filename != 'secrets.yaml':
-            with open(os.path.join(os.path.dirname(__file__), configs_dir, filename)) as f:
+            # with open(os.path.join(os.path.dirname(__file__), configs_dir, filename)) as f:
+            with open(os.path.join(configs_dir, filename)) as f:
                 # TODO use ESPHomeLoader fromm esphome/yaml_util.py to handle all the esphome specific yaml stuff like !secret
                 config = yaml.load(f, Loader=yaml.FullLoader)
                 configs.append(config)
     return configs
 
 def save_flows_to_file(flows_dir, flows_to_save):
-    with open(os.path.join(os.path.dirname(__file__), flows_dir, f"esphome_node_flows.flows"), 'w') as f:
+    # with open(os.path.join(os.path.dirname(__file__), flows_dir, f"esphome_node_flows.flows"), 'w') as f:
+    with open(os.path.join(flows_dir, f"esphome_node_flows.flows"), 'w') as f:
         f.write(json.dumps(flows_to_save, indent=2))
 
 def remove_node_red_editor_props(node):
@@ -150,12 +157,16 @@ def flow_to_esphome_yaml(flows):
     will need to find all inputs, and run down all strings they are connected to
     '''
     flow = flows['flows']
-    # parent_yaml = {}
+    editor_tabs = []
     children_nodes = {}
     for node in flow:
-        if (node.get('id') == '2083960c73baecfd'):
-            parent_yaml = node
-        elif (node.get('z') == '2083960c73baecfd'):
+        if (node.get('type') == 'tab'):
+            editor_tabs.append(node)
+    if not len(editor_tabs):
+        return
+    # TODO: hardcoded to only look at first flow tab
+    for node in flow:
+        if (node.get('z') == editor_tabs[0]['id']):
             children_nodes[node['id']] = node
 
     config = {}
@@ -377,10 +388,11 @@ class FlowsHandler(tornado.web.RequestHandler):
         self.write(flows)
     def post(self):
         global flows
+        global configs_dir
         print(self.request.headers.get('Node-Red-Deployment-Type'))
         flows = tornado.escape.json_decode(self.request.body)
         flows['rev'] = buildRandomHexString(32)
-        save_flows_to_file('esphome_configs', flows)
+        save_flows_to_file(configs_dir, flows)
         self.write({"rev": flows['rev'] })
         # TODO is this write_message working?       
         if (len(websockets)):
@@ -461,8 +473,10 @@ def make_app():
         (f"{rel}(.*)", tornado.web.StaticFileHandler, dict(path=os.path.join(os.path.dirname(__file__), editor_client_dir,"public"))),
     ], debug=True,)
 
-async def main(address, port):
-    get_or_build_flows_file('esphome_configs')
+async def main(address, port, esphome_configs_dir):
+    global configs_dir
+    configs_dir = esphome_configs_dir
+    get_or_build_flows_file(esphome_configs_dir)
 
     args = {
         'address': address,
@@ -480,7 +494,9 @@ async def main(address, port):
 
 if __name__ == "__main__":
     try:
-        asyncio.run(main('localhost',8888))
+        if (len(sys.argv)) <= 1:
+            print('Please run with a target directory for yaml/flows storage:\n"python3 server.py /dir/of/yaml/and/flows/"')
+        asyncio.run(main('localhost',8888, sys.argv[1]))
     except KeyboardInterrupt:
         _LOGGER.info("Shutting down...")
 
