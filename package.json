@@ -1,0 +1,5 @@
+{
+  "dependencies": {
+    "@node-red/editor-client": "3.0.0"
+  }
+}

@@ -1,0 +1,269 @@
+
+<!-- --- [red-module:node-red/junction] --- -->
+<!--
+  05-junction.html
+  This file exists so that the runtime loads the Junction node into the registry,
+  but it is empty so it doesn't appear in the editor palette
+-->
+
+<!-- --- [red-module:esphome/binary_light] --- -->
+
+<script type="text/javascript">
+    RED.nodes.registerType('binary_light',{
+        category: 'light',
+        color: '#e2d96e',
+        defaults: {
+            name: {value:""},
+            esphome: {
+                value: {
+                    'core': 'light',
+                    'platform': 'binary',
+                    'actions': [
+                        'toggle'
+                        // 'turn_on',
+                        // 'turn_off',
+                        // 'control',
+                    ],
+                    'automations': [
+                        'on_turn_on',
+                        'on_turn_off',
+                        'on_state'
+                    ],
+                    // either use output_id or make new output form within this node using output object (this node will now configure output and light)
+                    'output': null,
+                    'output_conf': {
+                        'id': null,
+                        'core': 'output',
+                        'platform': 'gpio',
+                        'pin': '',
+                        'inverted': false,
+                    }
+                }
+            }
+        },
+        inputs: 1,
+        outputs: 3,
+        inputLabels: function(i) {
+            return this.esphome.actions[i];
+        },
+        outputLabels: function(i) {
+            return this.esphome.automations[i];
+        },
+        icon: "light.svg",
+        label: function() {
+            return this.name||"binary_light";
+        },
+        oneditprepare: function() {
+            if (this.esphome.output_conf.pin) {
+                $("#node-input-pin").val(this.esphome.output_conf.pin)
+            }
+            if (this.esphome.output_conf.inverted) {
+                $("#node-input-inverted").attr('selected', true);
+            }
+        },
+        oneditsave: function() {
+            // TODO this is a required field to save (validation funcs available in defaults)
+            this.name = $("#node-input-name").val();
+            this.esphome.output_conf.pin = $("#node-input-pin").val();
+            this.esphome.output_conf.inverted = $("#node-input-inverted").val();
+            if (this.esphome.output === null) {
+                let randID = '';
+                for (let i = 0; i < 16; ++i) {
+                    randID += (Math.floor(Math.random() * 16)).toString(16);
+                }
+                this.esphome.output = randID;
+                this.esphome.output_conf.id = randID;
+            }
+        }
+    });
+</script>
+
+<script type="text/html" data-template-name="binary_light">
+    <div class="form-row">
+        <label for="node-input-name"><i class="fa fa-tag"></i> Name</label>
+        <input type="text" id="node-input-name" placeholder="Name">
+    </div>
+    <div class="form-row">
+        <label for="node-input-pin"> Pin</label>
+        <input type="text" id="node-input-pin" placeholder="pin">
+    </div>
+    <div class="form-row">
+        <label for="node-input-inverted"> Inverted</label>
+        <input type="checkbox" id="node-input-inverted" style="display:inline-block; width:15px; vertical-align:baseline;" autocomplete="off">
+    </div>
+        <!-- light class has actions (should come in from left and be configured in the node, or be available as actions) -->
+        <!-- also has triggers, which are outputs that should exit right of node to trigger other things -->
+        <!-- and also has conditions, which check if this light is on / off, before continuing on to do other things, so that should be pass thru nodes -->
+</script>
+
+<script type="text/html" data-help-name="binary_light">
+    <p>The binary light platform creates a simple ON/OFF-only light from a binary output component.</p>
+</script>
+
+<!-- --- [red-module:esphome/binary_sensor] --- -->
+
+<script type="text/javascript">
+    RED.nodes.registerType('binary_sensor',{
+        category: 'binary_sensor',
+        color: '#a6bbcf',
+        defaults: {
+            name: {value: ""},
+            esphome: {
+                value: {
+                    'core': 'binary_sensor',
+                    'platform': 'gpio',
+                    'automations': [
+                        'on_press',
+                        'on_release',
+                        'on_state',
+                        'on_click',
+                        'on_double_click',
+                        'on_multi_click'
+                    ],
+                    'pin': '',
+                    'internal': false,
+                    'device_class': null,
+                }
+            }
+        },
+        inputs: 0,
+        outputs: 6,
+        icon: "inject.svg",
+        label: function() {
+            return this.name||"binary_sensor";
+        },
+        outputLabels: function(i) {
+            return this.esphome.automations[i];
+        },
+        oneditprepare: function() {
+            if (this.esphome.device_class) {
+                $("#node-input-device_class").val(this.esphome.device_class)
+            }
+            if (this.esphome.pin) {
+                $("#node-input-pin").val(this.esphome.pin)
+            }
+            if (this.esphome.internal) {
+                $("#node-input-internal").attr('selected', true);
+            }
+        },
+        oneditsave: function() {
+            // TODO this is a required field to save (validation funcs available in defaults)
+            this.name = $("#node-input-name").val();
+            // TODO should be null, and then I should not pass it on
+            let device_class = $("#node-input-device_class").val();
+            if (device_class !== '') {
+                this.esphome.device_class = device_class;
+            }
+            this.esphome.pin = $("#node-input-pin").val();
+            this.esphome.internal = $("#node-input-internal").val();
+        }
+    });
+</script>
+
+<script type="text/html" data-template-name="binary_sensor">
+    <div class="form-row">
+        <label for="node-input-name"><i class="fa fa-tag"></i> Name</label>
+        <input type="text" id="node-input-name" placeholder="Name">
+    </div>
+    <div class="form-row">
+        <label for="node-input-device_class"> Device Class</label>
+        <select id="node-input-device_class" style="width:70%;">
+            <option value="" text=""></option>
+            <option value="battery">battery</option>
+            <option value="battery_charging">battery_charging</option>
+            <option value="co">co</option>
+            <option value="cold">cold</option>
+            <option value="connectivity">connectivity</option>
+            <option value="door">door</option>
+            <option value="garage_door">garage_door</option>
+            <option value="gas">gas</option>
+            <option value="heat">heat</option>
+            <option value="light">light</option>
+            <option value="lock">lock</option>
+            <option value="moisture">moisture</option>
+            <option value="motion">motion</option>
+            <option value="moving">moving</option>
+            <option value="occupancy">occupancy</option>
+            <option value="opening">opening</option>
+            <option value="plug">plug</option>
+            <option value="power">power</option>
+            <option value="presence">presence</option>
+            <option value="problem">problem</option>
+            <option value="running">running</option>
+            <option value="safety">safety</option>
+            <option value="smoke">smoke</option>
+            <option value="sound">sound</option>
+            <option value="tamper">tamper</option>
+            <option value="update">update</option>
+            <option value="vibration">vibration</option>
+            <option value="window">window</option>
+        </select>
+    </div>
+    <div class="form-row">
+        <label for="node-input-pin"> Pin</label>
+        <input type="text" id="node-input-pin" placeholder="pin">
+    </div>
+    <div class="form-row">
+        <label for="node-input-internal"><i class="fa fa-eye"></i> Internal</label>
+        <input type="checkbox" id="node-input-internal" style="display:inline-block; width:15px; vertical-align:baseline;" autocomplete="off">
+    </div>
+</script>
+
+<script type="text/html" data-help-name="binary_sensor">
+    <p>The GPIO Binary Sensor platform allows you to use any input pin on your device as a binary sensor</p>
+</script>
+
+<!-- --- [red-module:esphome/wifi] --- -->
+
+<script type="text/javascript">
+    RED.nodes.registerType('wifi',{
+        category: 'core',
+        color: '#94c1d0',
+        defaults: {
+            name: {value:"wifi"},
+            esphome: {
+                value: {
+                    'core': 'wifi',
+                    'ssid': null,
+                    'password': null
+                }
+            }
+        },
+        inputs: 0,
+        outputs: 0,
+        icon: "feed.svg",
+        label: function() {
+            return this.name||"wifi";
+        },
+        oneditprepare: function() {
+            if (this.esphome.ssid) {
+                $("#node-input-ssid").val(this.esphome.ssid)
+            }
+            if (this.esphome.password) {
+                $("#node-input-password").val(this.esphome.password);
+            }
+        },
+        oneditsave: function() {
+            // TODO this is a required field to save (validation funcs available in defaults)
+            this.name = $("#node-input-name").val();
+            this.esphome.ssid = $("#node-input-ssid").val();
+            this.esphome.password = $("#node-input-password").val();
+        }
+    });
+</script>
+
+<script type="text/html" data-template-name="wifi">
+    <div class="form-row">
+        <label for="node-input-ssid"><i class="fa fa-tag"></i> SSID</label>
+        <input type="text" id="node-input-ssid" placeholder="SSID">
+    </div>
+    <div class="form-row">
+        <label for="node-input-password"><i class="fa fa-tag"></i> Password</label>
+        <input type="password" id="node-input-password" placeholder="Password">
+    </div>
+</script>
+
+<script type="text/html" data-help-name="wifi">
+    <p>This core ESPHome component sets up WiFi connections to access points for you</p>
+</script>
+
