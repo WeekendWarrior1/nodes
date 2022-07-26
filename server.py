@@ -19,11 +19,12 @@ _LOGGER = logging.getLogger(__name__)
 
 editor_client_dir = os.path.join("node_modules","@node-red","editor-client")
 
-# TODO this is just to store some user settings to return, very simple and has no persistence
 configs_dir = ""
 websockets = []
+# TODO this is just to store some user settings to return, very simple and has no persistence
 user = {}
 flows = []
+# TODO this needs to be generated same time as nodes_html.html
 nodesObj = [
     {
 		"id": "node-red/junction",
@@ -72,8 +73,34 @@ nodesObj = [
 		"user": False,
 		"module": "esphome",
 		"version": "3.0.0"
+	},
+    {
+		"id": "esphome/esp32",
+		"name": "esp32",
+		"types": [
+			"esp32"
+		],
+		"enabled": True,
+		"local": False,
+		"user": False,
+		"module": "esphome",
+		"version": "3.0.0"
+	},
+    {
+		"id": "esphome/gpio_output",
+		"name": "gpio_output",
+		"types": [
+			"gpio_output"
+		],
+		"enabled": True,
+		"local": False,
+		"user": False,
+		"module": "esphome",
+		"version": "3.0.0"
 	}
 ]
+node_config_types = ['gpio_output']
+nodes_without_ids = ['esphome', 'esp32']
 
 # generate X length char hex string (https://stackoverflow.com/a/2782859)
 def buildRandomHexString(length):
@@ -165,8 +192,18 @@ def flow_to_esphome_yaml(flows):
     if not len(editor_tabs):
         return
     # TODO: hardcoded to only look at first flow tab
+    # Use flow tab as esphome core configuration
+    children_nodes[editor_tabs[0]['id']] = {
+        'id': editor_tabs[0]['id'],
+        'name': editor_tabs[0].get('label'),
+        'esphome': {
+            'core': 'esphome',
+            'comment': editor_tabs[0].get('info')
+        }
+    }
+    # TODO: hardcoded to only look at first flow tab
     for node in flow:
-        if (node.get('z') == editor_tabs[0]['id']):
+        if (node.get('z') == editor_tabs[0]['id'] or node.get('type') in node_config_types):
             children_nodes[node['id']] = node
 
     config = {}
@@ -176,11 +213,21 @@ def flow_to_esphome_yaml(flows):
     final_config = {}   # esphome json has a particular structure that is painful to work with, so we use 'config' as an intermediate 
                         # (mainly we want to store components within dict with id as key instead of entries in list)
     for node_id in config:
-        core = config[node_id]['core']
+        core = config[node_id].get('core')
+        platform = config[node_id].get('platform')
+        if (core in nodes_without_ids):
+            del config[node_id]['id']
+        if (core and platform):
         if core not in final_config:
             final_config[core] = []
         remove_node_red_editor_props(config[node_id])
         final_config[core].append(config[node_id])
+        # base properties like esphome, wifi, api don't sit in arrays - (powersupply, i2c, external_components doesn't abide by this)
+        elif (core and not platform):
+            remove_node_red_editor_props(config[node_id])
+            final_config[core] = config[node_id]
+
+        
     print(yaml.dump(final_config))
 
 def recursive_parse_wires_and_add_to_config(config, all_nodes, current_node):
@@ -190,18 +237,13 @@ def recursive_parse_wires_and_add_to_config(config, all_nodes, current_node):
     if children, process children
     '''
     # TODO handle non esphome nodes
-    # handle outputs prior to anything else
-    if current_node['esphome'].get('output_conf'):
-        if current_node['esphome']['output_conf']['id'] not in config:
-            config[current_node['esphome']['output_conf']['id']] = copy.deepcopy(current_node['esphome']['output_conf'])
-            del current_node['esphome']['output_conf']
     if current_node['id'] not in config:
         config[current_node['id']] = copy.deepcopy(current_node['esphome'])
         config[current_node['id']]['id'] = current_node['id']
         # TODO if schema allows name
-        if config[current_node['id']]['core'] != 'wifi':
+        if config[current_node['id']]['core'] != 'wifi' and current_node.get('name'):
             config[current_node['id']]['name'] = current_node['name']
-        
+    if (current_node.get('wires')):
     for i, output in enumerate(current_node['wires']):
         if len(output):
             # found a downstream node
@@ -212,6 +254,8 @@ def recursive_parse_wires_and_add_to_config(config, all_nodes, current_node):
                     config[current_node['id']][current_node['esphome']['automations'][i]] = {'then': []}
                 config[current_node['id']][current_node['esphome']['automations'][i]]['then'].append({f"{child_node['esphome']['core']}.{child_node['esphome']['actions'][0]}": child_id})
                 recursive_parse_wires_and_add_to_config(config, all_nodes, child_node)
+    # else:
+    #     print(current_node)
 
 class MainHandler(tornado.web.RequestHandler):
     def get(self):

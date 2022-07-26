@@ -14,12 +14,14 @@
         color: '#e2d96e',
         defaults: {
             name: {value:""},
+            gpio_output: {value:"", type:"gpio_output"},
             esphome: {
                 value: {
                     'core': 'light',
                     'platform': 'binary',
+                    'output': null,
                     'actions': [
-                        'toggle'
+                        'toggle',
                         // 'turn_on',
                         // 'turn_off',
                         // 'control',
@@ -29,15 +31,6 @@
                         'on_turn_off',
                         'on_state'
                     ],
-                    // either use output_id or make new output form within this node using output object (this node will now configure output and light)
-                    'output': null,
-                    'output_conf': {
-                        'id': null,
-                        'core': 'output',
-                        'platform': 'gpio',
-                        'pin': '',
-                        'inverted': false,
-                    }
                 }
             }
         },
@@ -53,27 +46,10 @@
         label: function() {
             return this.name||"binary_light";
         },
-        oneditprepare: function() {
-            if (this.esphome.output_conf.pin) {
-                $("#node-input-pin").val(this.esphome.output_conf.pin)
-            }
-            if (this.esphome.output_conf.inverted) {
-                $("#node-input-inverted").attr('selected', true);
-            }
-        },
         oneditsave: function() {
             // TODO this is a required field to save (validation funcs available in defaults)
             this.name = $("#node-input-name").val();
-            this.esphome.output_conf.pin = $("#node-input-pin").val();
-            this.esphome.output_conf.inverted = $("#node-input-inverted").val();
-            if (this.esphome.output === null) {
-                let randID = '';
-                for (let i = 0; i < 16; ++i) {
-                    randID += (Math.floor(Math.random() * 16)).toString(16);
-                }
-                this.esphome.output = randID;
-                this.esphome.output_conf.id = randID;
-            }
+            this.esphome.output = $("#node-input-gpio_output").val();
         }
     });
 </script>
@@ -84,16 +60,12 @@
         <input type="text" id="node-input-name" placeholder="Name">
     </div>
     <div class="form-row">
-        <label for="node-input-pin"> Pin</label>
-        <input type="text" id="node-input-pin" placeholder="pin">
+        <label for="node-input-gpio_output"><i class="fa fa-tag"></i> Output</label>
+        <input type="text" id="node-input-gpio_output" placeholder="Output">
     </div>
-    <div class="form-row">
-        <label for="node-input-inverted"> Inverted</label>
-        <input type="checkbox" id="node-input-inverted" style="display:inline-block; width:15px; vertical-align:baseline;" autocomplete="off">
-    </div>
-        <!-- light class has actions (should come in from left and be configured in the node, or be available as actions) -->
-        <!-- also has triggers, which are outputs that should exit right of node to trigger other things -->
-        <!-- and also has conditions, which check if this light is on / off, before continuing on to do other things, so that should be pass thru nodes -->
+    <!-- light class has actions (should come in from left and be configured in the node, or be available as actions) -->
+    <!-- also has triggers, which are outputs that should exit right of node to trigger other things -->
+    <!-- and also has conditions, which check if this light is on / off, before continuing on to do other things, so that should be pass thru nodes -->
 </script>
 
 <script type="text/html" data-help-name="binary_light">
@@ -143,7 +115,7 @@
                 $("#node-input-pin").val(this.esphome.pin)
             }
             if (this.esphome.internal) {
-                $("#node-input-internal").attr('selected', true);
+                $("#node-input-internal").prop('checked', true);
             }
         },
         oneditsave: function() {
@@ -155,7 +127,7 @@
                 this.esphome.device_class = device_class;
             }
             this.esphome.pin = $("#node-input-pin").val();
-            this.esphome.internal = $("#node-input-internal").val();
+            this.esphome.internal = $("#node-input-internal").is(":checked")
         }
     });
 </script>
@@ -267,3 +239,101 @@
     <p>This core ESPHome component sets up WiFi connections to access points for you</p>
 </script>
 
+<!-- --- [red-module:esphome/esp32] --- -->
+
+<script type="text/javascript">
+    RED.nodes.registerType('esp32',{
+        category: 'core',
+        color: '#94c1d0',
+        defaults: {
+            esphome: {
+                value: {
+                    'core': 'esp32',
+                    'board': '',
+                }
+            }
+        },
+        inputs: 0,
+        outputs: 0,
+        icon: "arduino.png",
+        label: function() {
+            return this.name||"esp32";
+        },
+        oneditprepare: function() {
+            if (this.esphome.board) {
+                $("#node-input-board").val(this.esphome.board)
+            }
+        },
+        oneditsave: function() {
+            let board = $("#node-input-board").val();
+            if (board !== '') {
+                this.esphome.board = board;
+            }
+        }
+    });
+</script>
+
+<script type="text/html" data-template-name="esp32">
+    <div class="form-row">
+        <!-- TODO - Should be search box -->
+        <label for="node-input-board"> Board</label>
+        <select id="node-input-board" style="width:70%;">
+            <option value="" text=""></option>
+            <option value="wemos_d1_mini32">WeMos D1 MINI ESP32</option>
+        </select>
+    </div>
+</script>
+
+<script type="text/html" data-help-name="esp32">
+    <p>All devices based on the original ESP32 are supported by ESPHome</p>
+</script>
+
+<!-- --- [red-module:esphome/gpio_output] --- -->
+
+<script type="text/javascript">
+    RED.nodes.registerType('gpio_output',{
+        category: 'config',
+        defaults: {
+            esphome: {
+                value: {
+                    'core': 'output',
+                    'platform': 'gpio',
+                    'pin': null,
+                    'inverted': false,
+                    // 'power_supply': null
+                }
+            }
+        },
+        label: function() {
+            return this.esphome.pin;
+        },
+        oneditprepare: function() {
+            if (this.esphome.pin) {
+                $("#node-input-pin").val(this.esphome.pin)
+            }
+            if (this.esphome.inverted) {
+                $("#node-input-inverted").prop('checked', true);
+            }
+            // if (this.esphome.power_supply) {
+            //     $("#node-input-power_supply").val(this.esphome.power_supply);
+            // }
+        },
+        oneditsave: function() {
+            // TODO this is a required field to save (validation funcs available in defaults)
+            this.esphome.pin = $("#node-input-pin").val();         
+            this.esphome.inverted = $("#node-input-inverted").is(":checked")
+            // this.esphome.power_supply = $("#node-input-power_supply").val();
+        }
+    });
+</script>
+
+<script type="text/html" data-template-name="gpio_output">
+    <div class="form-row">
+        <label for="node-input-pin"> Pin</label>
+        <input type="text" id="node-input-pin" placeholder="pin">
+    </div>
+    <div class="form-row">
+        <label for="node-input-inverted"> Inverted</label>
+        <input type="checkbox" id="node-input-inverted" style="display:inline-block; width:15px; vertical-align:baseline;" autocomplete="off">
+    </div>
+</script>
