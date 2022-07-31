@@ -1,5 +1,5 @@
 {
   "dependencies": {
-    "@node-red/editor-client": "3.0.0"
+    "@node-red/editor-client": "https://github.com/WeekendWarrior1/node-red/releases/download/3.0.1/node-red-editor-client-3.0.1.tgz"
   }
 }

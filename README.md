@@ -11,16 +11,19 @@ Currently very early in development, only looks at flow in first tab.
 Contains a few hand-built nodes with minimal subsets of their complete configurations.
 
 ### TODO (required for base level of functionality):
-- [ ] Add ability to have multiple inputs on nodes
-- [ ] Integrate slightly into ESPHome
+- [x] Add ability to have multiple inputs on nodes
+- [x] Integrate slightly into ESPHome
 - [ ] Start programatically generating nodes using ESPHome component schemas
-- [ ] Work on flow -> yaml parser
+- [ ] Improve flow -> yaml parser
 - [ ] Node-RED plugin for ESPHome serial device picker
 - [ ] Actually run the build, upload, run commands
 
 ### Future Ideas/TODO:
 - Each base platform with filters should have a filter node
+- Add and/or/not and while to if condition
 - Lambdas
+- Add cpp syntax highlighting to Monaco editor
+- Introduce editor with quick tour
 - util node to order if then actions
 - Option on nodes to toggle visiiblity of individual node inputs/outputs
 - Secrets in flow env?

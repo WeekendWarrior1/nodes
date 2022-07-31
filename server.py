@@ -97,10 +97,25 @@ nodesObj = [
 		"user": False,
 		"module": "esphome",
 		"version": "3.0.0"
+	},
+    {
+		"id": "esphome/conditional",
+		"name": "conditional",
+		"types": [
+			"conditional"
+		],
+		"enabled": True,
+		"local": False,
+		"user": False,
+		"module": "esphome",
+		"version": "3.0.0"
 	}
+    # conditional
 ]
 node_config_types = ['gpio_output']
 nodes_without_ids = ['esphome', 'esp32']
+cores_without_names = ['wifi']
+conditional_nodes = ['conditional']
 
 # generate X length char hex string (https://stackoverflow.com/a/2782859)
 def buildRandomHexString(length):
@@ -136,7 +151,7 @@ def get_or_build_flows_file(flows_dir):
         # TODO find how node-red handles this
         print("multiple .flows files found")
     # TESTING BUILDING YAML HERE
-    flow_to_esphome_yaml(flows)
+    # flow_to_esphome_yaml(flows)
 
 def build_flows_object(flows_dir):
     # TODO all directories need to be configurable, or locked into a sensible default
@@ -241,17 +256,25 @@ def recursive_parse_wires_and_add_to_config(config, all_nodes, current_node):
         config[current_node['id']] = copy.deepcopy(current_node['esphome'])
         config[current_node['id']]['id'] = current_node['id']
         # TODO if schema allows name
-        if config[current_node['id']]['core'] != 'wifi' and current_node.get('name'):
+        if config[current_node['id']]['core'] not in cores_without_names and current_node.get('name'):
             config[current_node['id']]['name'] = current_node['name']
     if (current_node.get('wires')):
     for i, output in enumerate(current_node['wires']):
         if len(output):
             # found a downstream node
             for child_id in output:
-                # if action
+                    # TODO keep track of where we are on our object
+                    # for now, unattach the else, that will probably need to be recorded further down the track within the node config
+                    #  what's on the other side of an action? is it a condition? or an automation? split in path based on that
+
+                    # if child is an action, push a then to the main object
                 child_node = all_nodes[child_id]
                 if not current_node['esphome']['automations'][i] in config[current_node['id']]:
                     config[current_node['id']][current_node['esphome']['automations'][i]] = {'then': []}
+                    # if child is an conditional, push a if, condition, then, else to main object
+                    # if child_node['esphome']['core'] in conditional_nodes:
+                    #     config[current_node['id']][current_node['esphome']['automations'][i]]['then'].append({'if': build_conditional_object(config, all_nodes, child_node)})
+                    else:
                 config[current_node['id']][current_node['esphome']['automations'][i]]['then'].append({f"{child_node['esphome']['core']}.{child_node['esphome']['actions'][0]}": child_id})
                 recursive_parse_wires_and_add_to_config(config, all_nodes, child_node)
     # else:
@@ -359,7 +382,7 @@ class SettingsHandler(tornado.web.RequestHandler):
             },
             "functionExternalModules": True,
             "tlsConfigDisableLocalFiles": False,
-            "paletteCategories": ['subflows', 'core', 'conditional', 'binary_sensor', 'light'],
+            "paletteCategories": ['subflows', 'core', 'util', 'binary_sensor', 'light'],
             "editorTheme": {
                 "languages": [
                     "en-US",
@@ -371,8 +394,8 @@ class SettingsHandler(tornado.web.RequestHandler):
                     # 'icon': "/absolute/path/to/deploy/button/image" # or null to remove image
                 },
                 'menu': { # Hide unwanted menu items by id. see packages/node_modules/@node-red/editor-client/src/js/red.js:loadEditor for complete list
-                    "menu-item-import-library": False,
-                    "menu-item-export-library": False,
+                    # "menu-item-import-library": False,
+                    # "menu-item-export-library": False,
                     "menu-item-keyboard-shortcuts": False,
                     "menu-item-edit-palette": False,
                     "menu-item-subflow": False,
@@ -496,8 +519,8 @@ class CommsSocketHandler(tornado.websocket.WebSocketHandler):
             self.write_message(json.dumps([{"topic":"notification/runtime-deploy","data":{"revision":flows['rev']}}]))
             # self.write_message(json.dumps([{"topic":"notification/runtime-state","data":{"state":"start"}},{"topic":"notification/runtime-deploy","data":{"revision": flowRevision}}]))
 
-def make_app():
-    rel = "/nodes/"#settings.relative_url
+def make_app(relative_url):
+    rel = relative_url
     return tornado.web.Application([
         (f"{rel}", MainHandler),
         (f"{rel}theme", ThemeHandler),
@@ -525,13 +548,10 @@ async def main(address, port, esphome_configs_dir):
     args = {
         'address': address,
         'port': port,
+        'relative_url': "/nodes/",
     }
-    app = make_app()
-    _LOGGER.info(
-        "Starting dashboard web server on http://%s:%s",
-        args['address'],
-        args['port'],
-    )
+    app = make_app(args['relative_url'])
+    print(f"Starting dashboard web server on http://{args['address']}:{args['port']}{args['relative_url']}",)
     app.listen(args['port'])
     # tornado.ioloop.IOLoop.current().start()
     await asyncio.Event().wait()
@@ -544,8 +564,35 @@ if __name__ == "__main__":
     except KeyboardInterrupt:
         _LOGGER.info("Shutting down...")
 
+'''
+# for when running within esphome
+def start_web_server(args):
+    # print(args)
+    args = {
+        'address': 'localhost',
+        'port': '6052',
+        'relative_url': "/nodes/",
+    }
 
+    global configs_dir
+    configs_dir = '/home/callan/git/tmp/node_configs/'
+    get_or_build_flows_file('/home/callan/git/tmp/node_configs/')
 
+    # print(a4988.stepper.CONFIG_SCHEMA)
+    # print(a4988.CONFIG_SCHEMA)
+    app = make_app('/nodes/')
+    _LOGGER.info(
+        "Starting dashboard web server on http://%s:%s and configuration dir %s...",
+        'localhost',
+        '6052',
+        '/home/callan/git/tmp/node_configs/',
+    )
+    app.listen('6052', 'localhost')
+    try:
+        tornado.ioloop.IOLoop.current().start()
+    except KeyboardInterrupt:
+        _LOGGER.info("Shutting down...")
+'''
 
 # TODO
 # start by manually creating simple input and output nodes - boolean input switch and boolean output led
