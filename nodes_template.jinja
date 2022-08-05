@@ -1,0 +1,117 @@
+{% for node in nodes %}
+<!-- --- [red-module:esphome/{{ node.core }}.{{ node.platform }}] --- -->
+
+<script type='text/javascript'>
+    RED.nodes.registerType('{{ node.core }}.{{ node.platform }}',{
+        category: '{{ node.core }}',
+        color: '{{ node.hex_colour }}',
+        defaults: {
+            name: {value:''},
+            esphome: {
+                value: {
+                    'core': '{{ node.core }}',
+                    'platform': '{{ node.platform }}',
+                    {% for config_var in node.all_config_vars %}
+                    '{{ config_var.name }}': null,
+                    {% endfor %}
+                    'actions': [
+                        {% for action in node.actions %}'{{ action }}',{% endfor %}
+                    ],
+                    'automations': [
+                        {% for automation in node.automations %}'{{ automation }}',{% endfor %}
+                    ],
+                    'conditions': [
+                        {% for condition in node.conditions %}'{{ condition }}',{% endfor %}
+                    ],
+                }
+            }
+        },
+        inputs: {{ node.actions_length }},
+        outputs: {{ node.automations_length }},
+        inputLabels: function(i) {
+            return this.esphome.actions[i];
+        },
+        outputLabels: function(i) {
+            return this.esphome.automations[i];
+        },
+        /*icon: '',*/
+        label: function() {
+            return this.name||'{{ node.core }}.{{ node.platform }}';
+        },
+        oneditprepare: function() {
+            console.log(this);
+            if (this.name !== '') {
+                $('#node-input-name').val(this.name);
+            }
+            {% for config_var in node.all_config_vars %}
+                {% if config_var.data_type == 'boolean' %}
+                if (this.esphome.{{ config_var.name }}) {
+                    $("#node-input-{{ config_var.name }}").prop('checked', true);
+                }
+                {% else %}
+                if (this.esphome.{{ config_var.name }}) {
+                    $('#node-input-{{ config_var.name }}').val(this.esphome.{{ config_var.name }});
+                }
+                {% endif %}
+            {% endfor %}
+        },
+        oneditsave: function() {
+            this.name = $('#node-input-name').val();
+            {% for config_var in node.all_config_vars %}
+                {% if config_var.data_type == 'boolean' %}
+                this.esphome.{{ config_var.name }} = $("#node-input-{{ config_var.name }}").is(":checked")
+                {% else %}
+                this.esphome.{{ config_var.name }} = ($('#node-input-{{ config_var.name }}').val() !== '') ? $('#node-input-{{ config_var.name }}').val() : null;
+                {% endif %}
+            {% endfor %}
+        }
+    });
+</script>
+
+<script type="text/html" data-template-name="{{ node.core }}.{{ node.platform }}">
+    <div class="form-row">
+        <label for="node-input-name"><i class="fa fa-tag"></i> Name</label>
+        <input type="text" id="node-input-name" placeholder="Name">
+    </div>
+    {% if node.required_exists %}
+    <hr align="middle">
+    <div class="form-row">
+        <label> Required:</label>
+    </div>
+    {% endif %}
+    {% for config_var in node.required %}
+    <div class="form-row" style="padding-left:15px;">
+        <label for="node-input-{{ config_var.name }}"> {{ config_var.name }}</label>
+        {% if config_var.data_type == 'boolean' %}
+        <input type="checkbox" id="node-input-{{ config_var.name }}" style="display:inline-block; width:15px; vertical-align:baseline;" autocomplete="off">
+        {% else %}
+        <input type="text" id="node-input-{{ config_var.name }}" placeholder="{{ config_var.data_type }}">
+        {% endif %}
+    </div>
+    {% endfor %}
+    {% if node.optional_exists %}
+    <hr align="middle">
+    <div class="form-row">
+        <label> Optional:</label>
+    </div>
+    {% endif %}
+    {% for config_var in node.optional %}
+    <div class="form-row" style="padding-left:15px;">
+        <label for="node-input-{{ config_var.name }}"> {{ config_var.name }}</label>
+        {% if config_var.data_type == 'boolean' %}
+        <input type="checkbox" id="node-input-{{ config_var.name }}" style="display:inline-block; width:15px; vertical-align:baseline;" autocomplete="off">
+        {% else %}
+        <input type="text" id="node-input-{{ config_var.name }}" placeholder="{{ config_var.data_type }}">
+        {% endif %}
+    </div>
+    {% endfor %}
+</script>
+
+<script type="text/{#markdown#}html" data-help-name="{{ node.core }}.{{ node.platform }}">
+    {% for doc in node.docs %}
+    {#{{ doc }}#}
+    <p>{{ doc }}</p>
+    {% endfor %}
+</script>
+
+{% endfor %}

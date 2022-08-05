@@ -1,3 +1,4 @@
 chevron==0.14.0
 tornado==6.1
 PyYAML==6.0
+Jinja2==3.0.1

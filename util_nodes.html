@@ -1,0 +1,165 @@
+
+<!-- --- [red-module:esphome/conditional] --- -->
+
+<script type="text/javascript">
+    RED.nodes.registerType('conditional',{
+        category: 'util',
+        color: '#CE5C00',
+        defaults: {
+            name: {value: ""},
+            // else_enabled: {value: false},
+            esphome: {
+                value: {
+                    'core': 'conditional',
+                    'condition': null,
+                    'entity': null,
+                    'lambda': null,
+                }
+            }
+        },
+        inputs: 1,
+        // outputs: (this.else_enabled) ? 2 : 1,
+        outputs: 2,
+        icon: "switch.svg",
+        label: function() {
+            return this.name || this.esphome.condition || 'conditional';
+        },
+        outputLabels: function(i) {
+            if (i == 0) {
+                return this.esphome.condition;
+            }
+            return 'else';
+        },
+        oneditprepare: function() {
+            // grab conditions of any nodes currently being used
+            let conditionals = {};
+            RED.nodes.eachNode((node) => {
+                console.log('node.type', node.type);
+                if (node.type !== 'conditional') {
+                    if (node.esphome.conditions) {
+                        const core = node.esphome.core;
+                        for (let condition of node.esphome.conditions) {
+                            if (conditionals[core] === undefined) {
+                                conditionals[core] = new Set();
+                            }
+                            conditionals[core].add(condition);
+                        }
+                    }
+                }
+            }); 
+            let input_if = $("#node-input-if")[0];
+            console.log('conditionals', conditionals);
+            for (let core in conditionals) {
+                console.log('conditionals core', core);
+                conditionals[core].forEach((condition) => {
+                    const opt = document.createElement("option");
+                    opt.value = `${core}.${condition}`;
+                    opt.text = `${core}.${condition}`;
+                    input_if.add(opt, null);
+                });
+            }
+            addLambda(input_if);
+
+            if (this.esphome.condition !== null) {
+                $("#node-input-if").val(this.esphome.condition);
+                if (this.esphome.entity !== null) {
+                    // wrap conditon to look like select box event to reuse populateEntities func
+                    populateEntities({'target':{'value': this.esphome.condition}});
+                    $("#node-input-entity").val(this.esphome.entity);
+                    $("#node-input-entity").show();
+                }
+            } else {
+                $("#node-input-entity").hide();
+            }
+
+            this.editor = RED.editor.createEditor({
+                id: 'node-input-lambda-editor',
+                // mode: 'ace/mode/text',
+                value: this.esphome.lambda,
+                // theme: 'monokai',
+                // dragAndDrop: true,
+                // showFoldingControls: 'always'
+            });
+            populateEntities({'target':{'value': this.esphome.condition}});
+            showEditor({'target':{'value': this.esphome.condition}});
+
+            input_if.addEventListener('change', populateEntities );
+            input_if.addEventListener('change', showEditor );
+
+        },
+        oneditsave: function() {
+            // TODO this is a required field to save (validation funcs available in defaults)
+            this.name = $("#node-input-name").val();
+            if ($("#node-input-if").val() !== '') {
+                this.esphome.condition = $("#node-input-if").val();
+            }
+            if ($("#node-input-entity").val() !== '') {
+                this.esphome.entity = $("#node-input-entity").val();
+            }
+            // this.else_enabled = $("#node-input-else").is(":checked");
+            // this.outputs = this.else_enabled ? 2 : 1;
+            this.esphome.lambda = this.editor.getValue() || null;
+            this.editor.destroy();
+            delete this.editor;
+        },
+        oneditcancel: function() {
+            this.editor.destroy();
+            delete this.editor;
+        },
+    });
+
+    function populateEntities(event) {
+        console.log('populateEntities', event);
+        let entity_input = $("#node-input-entity");
+        if (event.target?.value !== 'lambda') {
+            // remove any old entries
+            for (let i = 0; i < $('#node-input-entity')[0].length; i++) {
+                $("#node-input-entity")[0].remove(i);
+            }
+            const core_to_match = event.target.value.split('.')[0];
+            RED.nodes.eachNode((node) => {
+                if (node.esphome.core === core_to_match) {
+                    const opt = document.createElement("option");
+                    opt.value = node.id;
+                    opt.text = node.name || node.esphome.core;
+                    $("#node-input-entity")[0].add(opt, null);
+                }
+            });
+            entity_input.show();
+        } else {
+            entity_input.hide();
+        }
+    }
+    function addLambda(input_if) {
+        const opt = document.createElement("option");
+        opt.value = 'lambda';
+        opt.text = 'lambda';
+        input_if.add(opt, null);
+    }
+    function showEditor(event) {
+        if (event.target.value === 'lambda') {
+            $('#node-input-lambda-editor').show();
+        } else {
+            $('#node-input-lambda-editor').hide();
+        }
+    }
+</script>
+
+<script type="text/html" data-template-name="conditional">
+    <div class="form-row">
+        <label for="node-input-name"><i class="fa fa-tag"></i> Name</label>
+        <input type="text" id="node-input-name" placeholder="Name">
+    </div>
+    <div class="form-row">
+        <label for="node-input-if" style="width:8%;"> If</label>
+        <select id="node-input-if" style="width:40%;"></select>
+        <select id="node-input-entity" style="width:50%;"></select>
+    </div>
+    <div class="node-text-editor" style="height: 150px; min-height:100px;" id="node-input-lambda-editor"></div>
+    <!-- <div class="form-row">
+        <label for="node-input-else" style="width:38%;"><i class="fa fa-eye"></i> Enable "else:" output</label>
+        <input type="checkbox" id="node-input-else" style="display:inline-block; width:15px; vertical-align:baseline;" autocomplete="off">
+    </div> -->
+</script>
+
+<!-- --- [red-module:esphome/action_variables] --- -->

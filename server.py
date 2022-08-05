@@ -15,9 +15,14 @@ import json
 import yaml
 import copy
 
+from build_node import build_component_nodes
+
 _LOGGER = logging.getLogger(__name__)
 
 editor_client_dir = os.path.join("node_modules","@node-red","editor-client")
+
+schemas = {}
+node_schemas = {}
 
 configs_dir = ""
 websockets = []
@@ -116,6 +121,7 @@ node_config_types = ['gpio_output']
 nodes_without_ids = ['esphome', 'esp32']
 cores_without_names = ['wifi']
 conditional_nodes = ['conditional']
+util_nodes = ['conditional']
 
 # generate X length char hex string (https://stackoverflow.com/a/2782859)
 def buildRandomHexString(length):
@@ -279,6 +285,84 @@ def recursive_parse_wires_and_add_to_config(config, all_nodes, current_node):
                 recursive_parse_wires_and_add_to_config(config, all_nodes, child_node)
     # else:
     #     print(current_node)
+
+def get_all_schemas(schema_dir):
+    schemas = {}
+    schemas_json = os.listdir(schema_dir)
+    for schema_filename in schemas_json:
+        if (schema_filename.lower().endswith('.json')):
+            # with open(os.path.join(os.path.dirname(__file__), configs_dir, filename)) as f:
+            with open(os.path.join(schema_dir, schema_filename)) as f:
+                schema = json.loads(f.read())
+                for component in schema:
+                    schemas[component] = schema[component]
+                    # if component in debug_schemas_to_collect:
+                    #     # print(component)
+                    #     schemas[component] = schema[component]
+    return schemas
+
+def parse_schemas():
+    final_obj = {}
+    for component in schemas:
+        if 'components' in schemas[component]:
+            # this is a core component, and all it's platforms are contained within schemas[component]['components']
+            core = schemas[component]
+            final_obj[component] = {}
+            print(component)
+            for platform in core['components']:
+                print(f'    {platform}')
+                final_obj[component][platform] = {'config_vars': {}, 'automations': {}, 'actions': {}, 'conditions': {}}
+                if (component != 'core' and platform != 'xiaomi_miscale2' and platform != 'midea_ac'):
+                    add_keys_to_component_obj(final_obj[component][platform], f'{platform}.{component}', 'CONFIG_SCHEMA')
+                # skip cores for now, as core.adalight is empty
+                # else:
+                #     # core is an edge case where the 'platforms' are really base keys, so basically cores
+                #     add_keys_to_component_obj(final_obj[component], f'{platform}', 'CONFIG_SCHEMA')
+            # print(final_obj[component])
+    return final_obj
+
+def add_keys_to_component_obj(component_obj, component_name, config_name):
+    # print(component_name, config_name)
+    # print(schemas[component_name]['schemas'])
+    # TODO binary_sensor_map.sensor has no schema, but weird types
+    if schemas[component_name]['schemas'][config_name].get('typed_key'):
+        return
+    # get actions
+    if schemas[component_name].get('action'):
+        actions = schemas[component_name]['action']
+        for action in actions:
+            component_obj['actions'][action] = actions[action]
+    # get conditions
+    if schemas[component_name].get('condition'):
+        conditions = schemas[component_name]['condition']
+        for condition in conditions:
+            component_obj['conditions'][condition] = conditions[condition]
+    schema = schemas[component_name]['schemas'][config_name]['schema']
+    if schema.get('extends'):
+        for extend in schema['extends']:
+            extension = extend.split('.')
+            config_name = extension.pop(-1)
+            component_name = ''
+            for i in range(0, len(extension)):
+                if i != 0:
+                    component_name += '.'
+                component_name += extension[i]
+            if (component_name != 'core'): # TODO edge case?
+                add_keys_to_component_obj(component_obj, component_name, config_name)
+    for var in schema['config_vars']:
+        esphome_key = schema['config_vars'][var]
+        key_obj = {}
+        key = 'automations' if (esphome_key.get('type') == 'trigger') else 'config_vars'
+        # if esphome_key.get('schema'):
+        #     # this means this is a sub component, so go get modes and type?
+        #     print(esphome_key.get('modes'))
+        if esphome_key.get('default'):
+            key_obj['default'] = esphome_key['default']
+        key_obj['required'] = esphome_key.get('key') == 'Required'
+        key_obj['id_required'] = (esphome_key.get('id_type') != None)
+        if esphome_key.get('docs'):
+            key_obj['docs'] = esphome_key['docs']
+        component_obj[key][var] = key_obj
 
 class MainHandler(tornado.web.RequestHandler):
     def get(self):
@@ -470,13 +554,42 @@ class NodesHandler(tornado.web.RequestHandler):
         global nodesObj
         if (self.request.headers.get("Accept") == "application/json"):
             self.set_header("Content-Type", 'application/json')
-            # self.write('[]')
-            self.write(json.dumps(nodesObj))
+            # self.write(json.dumps(nodesObj))
+            nodes_json = []
+            for core in node_schemas:
+                for platform in node_schemas[core]:
+                    nodes_json.append({
+                        "id": f"esphome/{core}.{platform}",
+                        "name": f"{core}.{platform}",
+                        "types": [
+                            f"{core}.{platform}"
+                        ],
+                        "enabled": True,
+                        "local": False,
+                        "user": False,
+                        "module": "esphome",
+                        "version": "3.0.0"
+                    })
+            for util in util_nodes:
+                nodes_json.append({
+                    "id": f"esphome/{util}",
+                    "name": f"{util}",
+                    "types": [
+                        f"{util}"
+                    ],
+                    "enabled": True,
+                    "local": False,
+                    "user": False,
+                    "module": "esphome",
+                    "version": "3.0.0"
+                })
+            self.write(json.dumps(nodes_json))
         elif (self.request.headers.get("Accept") == "text/html"):
             self.set_header("Content-Type", 'text/html')
-            # self.write('')
-            with open(os.path.join(os.path.dirname(__file__), "nodes_html.html"), 'r') as f:
-                self.write(f.read())
+            # with open(os.path.join(os.path.dirname(__file__), "nodes_html.html"), 'r') as f:
+            #     self.write(f.read())
+            html = build_component_nodes(node_schemas)
+            self.write(html)
 
 class NodesMessagesHandler(tornado.web.RequestHandler):
     def set_default_headers(self):
@@ -542,8 +655,13 @@ def make_app(relative_url):
 
 async def main(address, port, esphome_configs_dir):
     global configs_dir
+    global schemas
+    global node_schemas
     configs_dir = esphome_configs_dir
     get_or_build_flows_file(esphome_configs_dir)
+    schemas = get_all_schemas(os.path.join(os.path.dirname(__file__), "schema"))
+    node_schemas = parse_schemas()
+    # print(node_schemas['stepper'])
 
     args = {
         'address': address,
